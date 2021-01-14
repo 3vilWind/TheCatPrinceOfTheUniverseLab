@@ -1,5 +1,5 @@
-/.internal
-/build
+/game/.internal
+/game/build
 .externalToolBuilders
 .DS_Store
 Thumbs.db
