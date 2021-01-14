@@ -6,3 +6,6 @@
 
 
 [Больше можно узнать здесь](https://github.com/3vilWind/TheCatPrinceOfTheUniverse/blob/master/description.pdf)
+
+
+[А поиграть можно здесь](https://3vilwind.com/the-cat-prince-of-the-universe/)
