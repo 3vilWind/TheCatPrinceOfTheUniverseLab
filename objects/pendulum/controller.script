@@ -1,0 +1,115 @@
+local broadcast = require "ludobits.m.broadcast"
+local utils = require "objects.pendulum.utils"
+local SimplePendulum = require "objects.pendulum.simple_pendulum"
+local pendulum_controller = require "objects.pendulum.pendulum_controller"
+
+go.property("initial_angle", 1)
+go.property("g", 9.8)
+go.property("period", 5)
+go.property("speed_multiplier", 1)
+go.property("sample_interval", 0.016666667535901)
+
+function theta(self, t) 
+	return self.initial_angle * math.cos(math.sqrt(self.g / self.rope_length) * t)
+end
+
+function rad2deg(x)
+	return x * 180 / math.pi
+end
+
+
+function init(self)
+	broadcast.register("pendulum_start")
+	broadcast.register("pendulum_stop")
+
+	self.stopped = true
+	self.base_rotation = go.get_rotation("rotating_part")
+	self.t = 0
+	-- local m = utils.agm(1, math.cos(self.initial_angle/2))
+	-- self.rope_length = (self.period * self.period * m * m * self.g) / (4 * math.pi * math.pi)
+	-- 
+	-- local y = {self.initial_angle, 0}
+	-- local t = self.t
+	-- local f = partial(partial(dydt, self.g), self.rope_length)
+	-- 
+	-- for sample_num=0, math.ceil(self.period / self.sample_interval) do 
+	-- 	local sampled_value = sample_num * self.sample_interval
+	-- 	t, y = RK.rk4(y, f, t, self.sample_interval)
+	-- 	self.samples[sample_num] = y[1]
+	-- end
+end
+
+function init_run(self, angle, period)
+	self.initial_angle = angle
+	self.period = period
+	
+	local pendulum = SimplePendulum:new(self.sample_interval, self.initial_angle, self.period, self.g)
+	self.pendulum_id = pendulum_controller.get_index(pendulum)
+
+	self.stopped = false
+end
+
+function final(self)
+	broadcast.unregister("pendulum_start")
+	broadcast.unregister("pendulum_stop")
+end
+
+function round(num)
+	return math.floor(num + 0.5)
+end
+
+function update(self, dt)
+	if self.stopped then
+		return
+	end
+	--print(dt)
+	self.t = self.t + dt * self.speed_multiplier
+	if self.t >= self.period then
+		self.t = self.t - self.period
+	end
+	local sample_num = round(self.t / self.sample_interval)
+	local new_angle = pendulum_controller.get_sample(self.pendulum_id, sample_num)
+	if new_angle == nil then
+		--local sampled_value = sample_num * self.sample_interval
+		--local y = {self.initial_angle, 0}
+		--local t = self.t
+		--t, y = RK.rk4(y, dydt, t, self.sample_interval)
+		--print(t)
+		--pprint(y)
+		--new_angle = y[1]
+		--new_angle = theta(self, y[1])
+		--self.samples[sample_num] = new_angle
+		print("WAT")
+	end
+	--local prev = go.get_rotation("rotating_part")
+	--pprint(prev)
+	go.set_rotation(vmath.quat_rotation_z(new_angle) * self.base_rotation, "rotating_part")
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("pendulum_stop") then
+		self.stopped = true
+	elseif message_id == hash("pendulum_start") then
+		self.stopped = false
+	elseif message_id == hash("pendulum_init") then
+		init_run(self, message.angle, message.period)
+	end
+end
+
+function on_input(self, action_id, action)
+	-- Add input-handling code here. The game object this script is attached to
+	-- must have acquired input focus:
+	--
+	--    msg.post(".", "acquire_input_focus")
+	--
+	-- All mapped input bindings will be received. Mouse and touch input will
+	-- be received regardless of where on the screen it happened.
+	-- Learn more: https://defold.com/manuals/input/
+	-- Remove this function if not needed
+end
+
+function on_reload(self)
+	-- Add reload-handling code here
+	-- Learn more: https://defold.com/manuals/hot-reload/
+	-- Remove this function if not needed
+end

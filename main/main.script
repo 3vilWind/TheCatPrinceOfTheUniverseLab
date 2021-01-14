@@ -1,0 +1,26 @@
+local monarch = require "monarch.monarch"
+local system_name = sys.get_sys_info().system_name
+
+function init(self)
+	msg.post(".", "acquire_input_focus")
+	math.randomseed(os.time())
+	--msg.post("@render:", "use_fixed_fit_projection", { near = -1, far = 1 })
+
+	if system_name == "Windows" or system_name == "Linux" or system_name == "Darwin" then
+		x, y, w, h = defos.get_view_size()
+		defos.set_view_size(x, y, 960, 540)
+	end
+
+	msg.post("#", "show_game")
+	msg.post(".", "acquire_input_focus")
+
+	self.input_state = hash("idle")
+	self.touch_position = vmath.vector3()
+end
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("show_game") then
+		monarch.show(hash("game"))
+		msg.post("/camera", "disable")
+	end
+end

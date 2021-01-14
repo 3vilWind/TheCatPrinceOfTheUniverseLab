@@ -1,0 +1,130 @@
+local camera = require "orthographic.camera"
+local bg_factory = "/spawners#bg_factory"
+local pendulum_factory = "/spawners#pendulum_factory"
+local player = "/player/go"
+local game_camera = hash("/game_camera")
+
+
+local pendulums = {{angle = 1.25, period=6}, {angle = 1.5, period=4}, {angle = 0.8, period=3}}
+
+
+function init(self)
+	self.state = hash("start")
+	sys.set_update_frequency(60)
+	self.left_border = 0
+	self.right_border = 0
+	self.bgs = {}
+	self.last_bg_border_x = -1921
+	self.pendulums = {}
+	self.last_pendulum_x = 1000
+	self.last_pendulum_top = true
+	self.inverted = false
+	self.score = 0
+end
+
+function update_label(self)
+	label.set_text("/score#label", self.score)
+end
+
+function change_state(self, new_state)
+	if new_state == hash("die") then
+		msg.post("main:/go", "show_game")
+	end
+end
+
+
+function on_message(self, message_id, message, sender)
+	if message_id == hash("die") then
+		change_state(self, hash("die"))
+	elseif message_id == hash("new_point") then
+		self.inverted = not self.inverted
+		local vec
+		if self.inverted then
+			vec = vmath.vector4(1, 1, 1, 1)
+		else
+			vec = vmath.vector4()
+		end
+		self.score = self.score + 1
+		update_label(self)
+		go.set("/unitquad#unitquad", "invert", vec)
+	end
+end
+
+
+function update_left_border(self, new_border)
+	self.left_border = new_border
+	camera.bounds(game_camera, self.left_border, 100000000, 100000000, 0)
+
+	while go.get_position(self.bgs[1]).x < self.left_border do
+		go.delete(self.bgs[1])
+		table.remove(self.bgs, 1)
+	end
+
+	while go.get_position(self.pendulums[1][hash("/fixed_point")]).x < self.left_border do
+		for key, value in ipairs(self.pendulums[1]) do
+			go.delete(value)
+		end
+		table.remove(self.pendulums, 1)
+	end
+end
+
+
+function update(self, dt)
+	local player_position = go.get_world_position(player)
+	local im_border = player_position.x - 2000
+	if im_border > self.left_border then
+		update_left_border(self, im_border)
+	end
+
+	if player_position.x < self.left_border or (player_position.y < -100) then
+		change_state(self, hash("die"))
+	end
+	
+	if player_position.x + 2000 >= self.last_bg_border_x then
+		spawn_next_bg(self)
+	end
+	if player_position.x + 2000 >= self.last_pendulum_x then
+		spawn_next_pendulum(self)
+	end
+end
+
+
+function spawn_next_bg(self)
+	spawn_bg_at(self, self.last_bg_border_x - 1)
+end
+
+
+function spawn_bg_at(self, x)
+	local bg = factory.create(bg_factory)
+	local bg_sprite =  msg.url(bg)
+	bg_sprite.fragment = "sprite"
+
+	local bg_size = go.get(bg_sprite, "size")
+	go.set_position(vmath.vector3(x + bg_size.x/2, bg_size.y/2, -1), bg)
+	table.insert(self.bgs, bg)
+	self.last_bg_border_x = x + bg_size.x
+end
+
+
+function spawn_next_pendulum(self)
+	spawn_pendulum_at(self, self.last_pendulum_x)
+end
+
+function spawn_pendulum_at(self, x)
+	local position
+	local rotation = vmath.quat()
+	if not self.last_pendulum_top then
+		position = vmath.vector3(self.last_pendulum_x, 1080 + 50, 0)
+	else
+		position = vmath.vector3(self.last_pendulum_x, 0 - 50, 0)
+		rotation = vmath.quat_rotation_z(math.pi)
+	end
+	
+	self.last_pendulum_x = x + 800
+	local pendulum = collectionfactory.create(pendulum_factory, position, rotation)
+	table.insert(self.pendulums, pendulum)
+	local pendulum_model = pendulums[math.random(1, #pendulums)]
+	msg.post(pendulum[hash("/go")], "pendulum_init", pendulum_model)
+
+	self.last_pendulum_top = not self.last_pendulum_top
+end
